@@ -1,9 +1,0 @@
-# Python
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-.env
-
-# Generated map (uncomment the next line if you do not want to commit it)
-# smart_traffic_map.html
