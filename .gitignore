@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+instance/
+# Generated standalone map
+# smart_traffic_map.html

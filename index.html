@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0b1020" />
+  <title>Smart Traffic | Live Simulation Dashboard</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --bg: #080d19; --panel: rgba(17, 25, 44, .88); --panel2: #111b30;
+      --line: rgba(148, 163, 184, .16); --muted: #93a4bd; --text: #edf4ff;
+      --cyan: #51d7f4; --green: #35d39a; --orange: #ffb454; --red: #ff637d;
+      --shadow: 0 18px 60px rgba(0,0,0,.24);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; color: var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+      background: radial-gradient(ellipse at 15% 0%, rgba(32, 93, 154, .22), transparent 35%),
+                  radial-gradient(ellipse at 100% 30%, rgba(24, 184, 178, .10), transparent 32%), var(--bg);
+      min-height: 100vh;
+    }
+    .shell { max-width: 1500px; margin: auto; padding: 26px clamp(14px, 3vw, 38px) 36px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 25px; flex-wrap: wrap; }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .logo { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 15px; color: #06111e; font-size: 25px;
+      background: linear-gradient(135deg, var(--cyan), #80f0ce); box-shadow: 0 0 32px rgba(81,215,244,.18); }
+    h1 { margin: 0; font-size: clamp(22px, 3vw, 31px); letter-spacing: -.8px; }
+    .subtitle { color: var(--muted); margin-top: 5px; font-size: 13px; }
+    .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .live-pill { display: flex; align-items: center; gap: 8px; border: 1px solid rgba(53,211,154,.28); border-radius: 999px; padding: 9px 12px; color: #9af2d2; background: rgba(53,211,154,.08); font-size: 12px; }
+    .dot { width: 7px; height: 7px; background: var(--green); border-radius: 50%; box-shadow: 0 0 12px var(--green); animation: pulse 1.8s infinite; }
+    button, select { font: inherit; }
+    button { border: 0; cursor: pointer; color: #06111e; font-weight: 750; background: linear-gradient(135deg, var(--cyan), #8af2d7); padding: 11px 15px; border-radius: 11px; transition: transform .18s, opacity .18s; }
+    button:hover { transform: translateY(-1px); } button:disabled { opacity: .55; cursor: wait; }
+    .secondary { color: var(--text); background: var(--panel2); border: 1px solid var(--line); }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
+    .card { border: 1px solid var(--line); background: var(--panel); border-radius: 18px; box-shadow: var(--shadow); backdrop-filter: blur(14px); }
+    .stat { padding: 19px; position: relative; overflow: hidden; }
+    .stat:after { content: ""; position: absolute; width: 100px; height: 100px; right: -38px; top: -40px; border-radius: 50%; background: var(--glow, rgba(81,215,244,.10)); filter: blur(3px); }
+    .stat-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 1.1px; }
+    .stat-value { font-size: 31px; font-weight: 800; letter-spacing: -1px; margin-top: 11px; }
+    .stat-note { color: var(--muted); font-size: 12px; margin-top: 5px; }
+    .main-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(310px, .9fr); gap: 16px; align-items: stretch; }
+    .map-card { padding: 17px; min-width: 0; }
+    .section-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 15px; flex-wrap: wrap; }
+    h2 { font-size: 16px; margin: 0; letter-spacing: -.2px; }
+    .section-caption { color: var(--muted); font-size: 12px; margin-top: 5px; }
+    .map-tools { display: flex; align-items: center; gap: 8px; }
+    select { background: #0d1628; border: 1px solid var(--line); color: var(--text); padding: 9px 10px; border-radius: 9px; outline: none; }
+    #map { height: 490px; width: 100%; border-radius: 13px; overflow: hidden; background: #121e30; }
+    .leaflet-container { font-family: inherit; }
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: #101a2c; color: #eff6ff; }
+    .leaflet-popup-content { margin: 12px 14px; }
+    .popup-title { font-weight: 800; margin-bottom: 5px; }
+    .popup-meta { color: #a8b9d0; font-size: 12px; line-height: 1.65; }
+    .marker-dot { border-radius: 50%; border: 3px solid rgba(255,255,255,.92); box-shadow: 0 0 0 6px rgba(255,255,255,.08), 0 0 24px currentColor; }
+    .side { display: flex; flex-direction: column; gap: 16px; }
+    .panel { padding: 18px; }
+    .legend { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .legend-item { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; }
+    .legend-swatch { width: 8px; height: 8px; border-radius: 50%; }
+    .intersection-list { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+    .intersection { border: 1px solid var(--line); background: rgba(7,13,25,.35); padding: 12px; border-radius: 13px; display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+    .intersection-name { font-weight: 750; font-size: 13px; }
+    .intersection-sub { color: var(--muted); font-size: 11px; margin-top: 4px; }
+    .count { font-size: 22px; font-weight: 850; text-align: right; }
+    .status { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .7px; margin-top: 3px; text-align: right; }
+    .bar { grid-column: 1 / -1; height: 5px; border-radius: 99px; background: #26334a; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: inherit; transition: width .45s ease; }
+    .bottom-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 16px; margin-top: 16px; }
+    .chart-area { display: flex; align-items: end; gap: 16px; height: 135px; padding: 12px 8px 0; }
+    .chart-column { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; height: 100%; justify-content: end; }
+    .chart-value { color: #d8e8fa; font-size: 11px; font-weight: 700; }
+    .chart-bar { width: min(42px, 72%); min-height: 5px; border-radius: 8px 8px 3px 3px; transition: height .4s ease; background: linear-gradient(180deg, #51d7f4, #2774bb); box-shadow: 0 0 18px rgba(81,215,244,.1); }
+    .chart-label { color: var(--muted); font-size: 10px; text-align: center; }
+    .insight { display: flex; gap: 12px; align-items: flex-start; padding: 13px; border-radius: 13px; background: rgba(81,215,244,.06); border: 1px solid rgba(81,215,244,.14); margin-top: 13px; }
+    .insight-icon { width: 31px; height: 31px; border-radius: 10px; display: grid; place-items: center; background: rgba(81,215,244,.12); flex-shrink: 0; }
+    .insight strong { font-size: 12px; display: block; margin-bottom: 4px; }
+    .insight p { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0; }
+    .footer { display: flex; justify-content: space-between; gap: 12px; color: #70829c; font-size: 11px; margin-top: 20px; flex-wrap: wrap; }
+    .toast { position: fixed; bottom: 22px; right: 22px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 12px; background: #15243a; box-shadow: var(--shadow); font-size: 13px; opacity: 0; transform: translateY(8px); transition: .25s; pointer-events: none; z-index: 10000; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .error { color: #ff9eac; background: rgba(255,99,125,.08); border: 1px solid rgba(255,99,125,.25); padding: 12px; border-radius: 10px; margin-top: 12px; display: none; font-size: 12px; }
+    @keyframes pulse { 50% { opacity: .45; transform: scale(.85); } }
+    @media (max-width: 1050px) { .main-layout { grid-template-columns: 1fr; } .side { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); } .side .panel:last-child { grid-column: 1/-1; } }
+    @media (max-width: 700px) { .grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .bottom-grid, .side { grid-template-columns: 1fr; } .side .panel:last-child { grid-column: auto; } #map { height: 390px; } .stat { padding: 15px; } .stat-value { font-size: 26px; } .header-actions { width: 100%; justify-content: space-between; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div class="brand">
+        <div class="logo">⌁</div>
+        <div>
+          <h1>Smart Traffic <span style="color:var(--cyan)">Control</span></h1>
+          <div class="subtitle">Delhi NCR · Intelligent intersection monitoring</div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="live-pill"><span class="dot"></span><span id="connectionLabel">Connecting to simulator…</span></div>
+        <button id="refreshBtn" onclick="refreshTraffic()">↻ &nbsp; Refresh data</button>
+      </div>
+    </header>
+
+    <section class="grid" aria-label="Traffic overview">
+      <article class="card stat" style="--glow:rgba(81,215,244,.12)">
+        <div class="stat-label">Monitored intersections</div><div class="stat-value" id="totalSites">—</div><div class="stat-note">Delhi NCR network</div>
+      </article>
+      <article class="card stat" style="--glow:rgba(255,180,84,.12)">
+        <div class="stat-label">Simulated vehicles</div><div class="stat-value" id="totalVehicles">—</div><div class="stat-note">Across all intersections</div>
+      </article>
+      <article class="card stat" style="--glow:rgba(255,99,125,.12)">
+        <div class="stat-label">High traffic zones</div><div class="stat-value" id="highZones">—</div><div class="stat-note">13+ vehicles in simulation</div>
+      </article>
+      <article class="card stat" style="--glow:rgba(53,211,154,.12)">
+        <div class="stat-label">Network status</div><div class="stat-value" id="networkStatus" style="font-size:25px">—</div><div class="stat-note" id="lastUpdated">Waiting for first update</div>
+      </article>
+    </section>
+
+    <section class="main-layout">
+      <article class="card map-card">
+        <div class="section-head">
+          <div><h2>Geospatial traffic map</h2><div class="section-caption">Select a marker to inspect its current simulated reading</div></div>
+          <div class="map-tools">
+            <select id="mapFilter" aria-label="Filter traffic level" onchange="applyFilter()">
+              <option value="all">All traffic levels</option><option value="Low">Low traffic</option><option value="Moderate">Moderate traffic</option><option value="High">High traffic</option>
+            </select>
+          </div>
+        </div>
+        <div id="map" role="application" aria-label="Interactive traffic map"></div>
+        <div class="legend">
+          <span class="legend-item"><i class="legend-swatch" style="background:var(--green)"></i>Low · 0–5</span>
+          <span class="legend-item"><i class="legend-swatch" style="background:var(--orange)"></i>Moderate · 6–12</span>
+          <span class="legend-item"><i class="legend-swatch" style="background:var(--red)"></i>High · 13–20</span>
+          <span class="legend-item" style="margin-left:auto">Map tiles by OpenStreetMap</span>
+        </div>
+        <div id="errorBox" class="error">Cannot connect to the Python API. Start the app with <code>python app.py</code>, then open <code>http://127.0.0.1:5000</code>.</div>
+      </article>
+
+      <aside class="side">
+        <article class="card panel">
+          <div class="section-head" style="margin-bottom:0"><div><h2>Intersection status</h2><div class="section-caption">Live simulator readings</div></div><span style="color:var(--muted);font-size:11px" id="siteCount">0 sites</span></div>
+          <div id="intersectionList" class="intersection-list"></div>
+        </article>
+        <article class="card panel">
+          <h2>Traffic intelligence</h2><div class="section-caption">Automatically generated summary</div>
+          <div class="insight"><div class="insight-icon">↗</div><div><strong id="insightTitle">Analysing the network</strong><p id="insightText">Waiting for traffic readings from the Python backend.</p></div></div>
+          <div class="insight" style="background:rgba(53,211,154,.05);border-color:rgba(53,211,154,.14)"><div class="insight-icon" style="background:rgba(53,211,154,.12)">✓</div><div><strong>Simulation status</strong><p>Randomized demonstration data only. No live sensors, camera feeds, or signal control are connected.</p></div></div>
+        </article>
+      </aside>
+    </section>
+
+    <section class="bottom-grid">
+      <article class="card panel">
+        <div class="section-head"><div><h2>Vehicle density comparison</h2><div class="section-caption">Simulated vehicle count by intersection</div></div></div>
+        <div class="chart-area" id="chartArea"></div>
+      </article>
+      <article class="card panel">
+        <h2>System activity</h2><div class="section-caption">Backend connection and data refresh</div>
+        <div class="insight"><div class="insight-icon">⌘</div><div><strong id="activityTitle">Initializing dashboard</strong><p id="activityText">The page requests readings from the Flask API and updates the map, chart, and status cards.</p></div></div>
+        <div style="display:flex;justify-content:space-between;gap:12px;margin-top:17px;color:var(--muted);font-size:11px"><span>Auto-refresh</span><strong style="color:var(--green)">Every 10 seconds</strong></div>
+      </article>
+    </section>
+    <footer class="footer"><span>SMART TRAFFIC CONTROL · EDUCATIONAL DEMONSTRATION</span><span id="footerTime">Awaiting data</span></footer>
+  </main>
+  <div class="toast" id="toast" role="status"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const COLORS = { Low: '#35d39a', Moderate: '#ffb454', High: '#ff637d' };
+    let trafficData = [];
+    let map;
+    let markerLayers = {};
+
+    function initMap() {
+      map = L.map('map', { zoomControl: true }).setView([28.6, 77.2], 9);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+    }
+
+    function markerIcon(color) {
+      return L.divIcon({
+        className: '',
+        html: `<div class="marker-dot" style="width:20px;height:20px;background:${color};color:${color}"></div>`,
+        iconSize: [20, 20], iconAnchor: [10, 10]
+      });
+    }
+
+    function popupHTML(point) {
+      return `<div class="popup-title">${escapeHTML(point.name)} · Intersection ${escapeHTML(point.id)}</div>
+        <div class="popup-meta">Vehicles: <b>${point.vehicles}</b><br>Traffic level: <b style="color:${COLORS[point.level]}">${point.level}</b><br>Coordinates: ${point.lat.toFixed(4)}, ${point.lng.toFixed(4)}<br>Updated: ${escapeHTML(point.updated_at || 'just now')}</div>`;
+    }
+
+    function escapeHTML(value) {
+      return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function updateMap() {
+      const filter = document.getElementById('mapFilter').value;
+      trafficData.forEach(point => {
+        if (!markerLayers[point.id]) {
+          markerLayers[point.id] = L.marker([point.lat, point.lng], { icon: markerIcon(COLORS[point.level]) }).addTo(map);
+        }
+        const marker = markerLayers[point.id];
+        marker.setLatLng([point.lat, point.lng]);
+        marker.setIcon(markerIcon(COLORS[point.level]));
+        marker.bindPopup(popupHTML(point));
+        if (filter === 'all' || point.level === filter) {
+          if (!map.hasLayer(marker)) marker.addTo(map);
+        } else if (map.hasLayer(marker)) {
+          map.removeLayer(marker);
+        }
+      });
+    }
+
+    function applyFilter() { updateMap(); }
+
+    function renderStats() {
+      const totalVehicles = trafficData.reduce((sum, p) => sum + p.vehicles, 0);
+      const highZones = trafficData.filter(p => p.level === 'High').length;
+      const average = trafficData.length ? totalVehicles / trafficData.length : 0;
+      document.getElementById('totalSites').textContent = trafficData.length;
+      document.getElementById('totalVehicles').textContent = totalVehicles;
+      document.getElementById('highZones').textContent = highZones;
+      const status = highZones >= 2 ? 'Busy' : highZones === 1 ? 'Watch' : 'Stable';
+      document.getElementById('networkStatus').textContent = status;
+      document.getElementById('networkStatus').style.color = highZones >= 2 ? 'var(--red)' : highZones === 1 ? 'var(--orange)' : 'var(--green)';
+      document.getElementById('siteCount').textContent = `${trafficData.length} sites`;
+      const updated = new Date();
+      document.getElementById('lastUpdated').textContent = `Updated ${updated.toLocaleTimeString()}`;
+      document.getElementById('footerTime').textContent = `Last synced: ${updated.toLocaleString()}`;
+
+      const list = document.getElementById('intersectionList');
+      list.innerHTML = trafficData.map(p => {
+        const color = COLORS[p.level] || '#51d7f4';
+        return `<div class="intersection">
+          <div><div class="intersection-name">${escapeHTML(p.name)}</div><div class="intersection-sub">Intersection ${escapeHTML(p.id)} · ${p.level} traffic</div></div>
+          <div><div class="count">${p.vehicles}</div><div class="status" style="color:${color}">${p.level}</div></div>
+          <div class="bar"><div class="bar-fill" style="width:${p.vehicles / 20 * 100}%;background:${color}"></div></div>
+        </div>`;
+      }).join('');
+
+      const chart = document.getElementById('chartArea');
+      chart.innerHTML = trafficData.map(p => {
+        const color = COLORS[p.level] || '#51d7f4';
+        const height = Math.max(5, p.vehicles / 20 * 100);
+        return `<div class="chart-column"><div class="chart-value">${p.vehicles}</div><div class="chart-bar" style="height:${height}%;background:linear-gradient(180deg,${color},${color}88)"></div><div class="chart-label">${escapeHTML(p.name)}</div></div>`;
+      }).join('');
+
+      const busiest = [...trafficData].sort((a,b) => b.vehicles - a.vehicles)[0];
+      const calmest = [...trafficData].sort((a,b) => a.vehicles - b.vehicles)[0];
+      if (busiest) {
+        document.getElementById('insightTitle').textContent = `${busiest.name} has the highest reading`;
+        document.getElementById('insightText').textContent = `${busiest.vehicles} simulated vehicles; network average is ${average.toFixed(1)}. ${highZones ? highZones + ' intersection(s) currently show high traffic.' : 'No intersections are currently in the high-traffic band.'}`;
+        document.getElementById('activityTitle').textContent = `Latest refresh completed`;
+        document.getElementById('activityText').textContent = `The API returned ${trafficData.length} readings. Lowest reading: ${calmest.name} (${calmest.vehicles} vehicles).`;
+      }
+    }
+
+    async function loadTraffic(showToast = false) {
+      try {
+        const response = await fetch('/api/traffic', { cache: 'no-store' });
+        if (!response.ok) throw new Error(`API returned ${response.status}`);
+        const payload = await response.json();
+        trafficData = payload.intersections || [];
+        updateMap();
+        renderStats();
+        document.getElementById('connectionLabel').textContent = 'Backend connected';
+        document.getElementById('errorBox').style.display = 'none';
+        if (showToast) toast('Traffic simulation refreshed successfully.');
+      } catch (error) {
+        document.getElementById('connectionLabel').textContent = 'Backend disconnected';
+        document.getElementById('errorBox').style.display = 'block';
+        document.getElementById('activityTitle').textContent = 'Unable to reach Python API';
+        document.getElementById('activityText').textContent = 'Start the server with “python app.py” and visit http://127.0.0.1:5000.';
+        console.error(error);
+      }
+    }
+
+    async function refreshTraffic() {
+      const button = document.getElementById('refreshBtn');
+      button.disabled = true;
+      button.textContent = 'Refreshing…';
+      try {
+        const response = await fetch('/api/refresh', { method: 'POST' });
+        if (!response.ok) throw new Error(`API returned ${response.status}`);
+        const payload = await response.json();
+        trafficData = payload.intersections || [];
+        updateMap();
+        renderStats();
+        document.getElementById('connectionLabel').textContent = 'Backend connected';
+        document.getElementById('errorBox').style.display = 'none';
+        toast('New simulated traffic values generated.');
+      } catch (error) {
+        await loadTraffic();
+      } finally {
+        button.disabled = false;
+        button.innerHTML = '↻ &nbsp; Refresh data';
+      }
+    }
+
+    function toast(message) {
+      const el = document.getElementById('toast');
+      el.textContent = message;
+      el.classList.add('show');
+      setTimeout(() => el.classList.remove('show'), 2800);
+    }
+
+    initMap();
+    loadTraffic();
+    setInterval(() => loadTraffic(), 10000);
+  </script>
+</body>
+</html>
